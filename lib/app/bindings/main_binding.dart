@@ -14,10 +14,20 @@ class MainBinding implements Bindings {
       permanent: true,
     );
     
+    // Initialize FeedController
+    Get.lazyPut<FeedController>(
+      () => FeedController(),
+      fenix: true, // Recreate when needed
+    );
+    
+    // Initialize ProfileController
+    Get.lazyPut<ProfileController>(
+      () => ProfileController(),
+      fenix: true,
+    );
+    
     // Auth middleware
     Get.put(AuthMiddleware(), permanent: true);
-    
-    // Core controllers needed for main screen navigation
     Get.lazyPut<FeedController>(
       () => FeedController(),
       fenix: true,

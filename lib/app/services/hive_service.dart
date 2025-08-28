@@ -1,0 +1,211 @@
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:socialmedia_clone/app/data/models/user_model.dart';
+
+class HiveService {
+  static const String _userBox = 'user_box';
+  static const String _currentUserKey = 'current_user';
+  static const String _usersListKey = 'users_list';
+
+  static late Box _box;
+
+  /// Initialize Hive and open the user box
+  static Future<void> init() async {
+    await Hive.initFlutter();
+    _box = await Hive.openBox(_userBox);
+
+    // Create default admin user if it doesn't exist
+    await _createDefaultAdminUser();
+  }
+
+  /// Save the current user to Hive
+  static Future<void> setCurrentUser(dynamic user) async {
+    try {
+      // Convert to UserModel if it's a map
+      final UserModel userModel;
+      if (user is UserModel) {
+        userModel = user;
+      } else if (user is Map<String, dynamic>) {
+        userModel = UserModel.fromJson(user);
+      } else {
+        throw Exception('Invalid user data type: ${user.runtimeType}');
+      }
+
+      debugPrint('💾 Saving current user to Hive: ${userModel.email}');
+
+      // Save as Map<String, dynamic> to avoid requiring Hive adapters
+      await _box.put(_currentUserKey, userModel.toJson());
+      debugPrint('✅ Successfully saved current user');
+
+      // Verify the user was saved
+      final savedUser = _box.get(_currentUserKey);
+      debugPrint(
+        '🔍 Current user in Hive: ${savedUser != null ? savedUser.toString() : 'NULL'}',
+      );
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error saving current user: $e');
+      debugPrint('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  /// Get the current user from Hive
+  static Future<UserModel?> getCurrentUser() async {
+    final userData = _box.get(_currentUserKey);
+    if (userData == null) return null;
+
+    try {
+      if (userData is UserModel) {
+        return userData;
+      } else if (userData is Map) {
+        final map = Map<String, dynamic>.from(userData as Map);
+        return UserModel.fromJson(map);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error parsing user data: $e');
+      return null;
+    }
+  }
+
+  /// Get the current user from Hive synchronously
+  static UserModel? getCurrentUserSync() {
+    try {
+      final userData = _box.get(_currentUserKey);
+      if (userData == null) return null;
+
+      if (userData is UserModel) {
+        return userData;
+      } else if (userData is Map) {
+        final map = Map<String, dynamic>.from(userData as Map);
+        return UserModel.fromJson(map);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error parsing user data sync: $e');
+      return null;
+    }
+  }
+
+  /// Delete the current user from Hive
+  static Future<void> deleteCurrentUser() async {
+    await _box.delete(_currentUserKey);
+  }
+
+  /// Clear all data from Hive
+  static Future<void> clearAll() async {
+    await _box.clear();
+  }
+
+  /// Find a user by email
+  static Future<UserModel?> findUserByEmail(String email) async {
+    try {
+      debugPrint('🔍 Searching for user with email: $email');
+      final users = await getUsers();
+      debugPrint('📋 Found ${users.length} users in database');
+
+      for (var user in users) {
+        debugPrint(' - ${user.email} (ID: ${user.id})');
+      }
+
+      try {
+        final foundUser = users.firstWhere(
+          (user) => user.email.toLowerCase() == email.toLowerCase(),
+        );
+        debugPrint('✅ Found user: ${foundUser.email}');
+        return foundUser;
+      } catch (e) {
+        debugPrint('❌ User not found with email: $email');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ Error finding user by email: $e');
+      return null;
+    }
+  }
+
+  /// Get all users
+  static Future<List<UserModel>> getUsers() async {
+    final dynamic raw = _box.get(_usersListKey, defaultValue: <dynamic>[]);
+
+    if (raw is List) {
+      final List<UserModel> users = [];
+      for (final dynamic item in raw) {
+        try {
+          if (item is UserModel) {
+            users.add(item);
+          } else if (item is Map) {
+            final map = Map<String, dynamic>.from(item as Map);
+            users.add(UserModel.fromJson(map));
+          } else {
+            debugPrint(
+              '⚠️ Unsupported user list item type: ${item.runtimeType}',
+            );
+          }
+        } catch (e) {
+          debugPrint('❌ Error parsing user list item: $e');
+        }
+      }
+      return users;
+    }
+
+    // Fallback: unexpected storage format
+    debugPrint(
+      '⚠️ Unexpected users list format: ${raw.runtimeType}. Returning empty list.',
+    );
+    return <UserModel>[];
+  }
+
+  /// Save a new user
+  static Future<void> saveNewUser(UserModel user) async {
+    final users = await getUsers();
+
+    // Check if user with same email already exists
+    if (users.any((u) => u.email.toLowerCase() == user.email.toLowerCase())) {
+      throw Exception('User with this email already exists');
+    }
+
+    // Add new user to the list
+    users.add(user);
+
+    // Save updated list as List<Map<String, dynamic>> for consistency
+    await _box.put(_usersListKey, users.map((u) => u.toJson()).toList());
+  }
+
+  /// Create a default admin user for testing
+  static Future<void> _createDefaultAdminUser() async {
+    final adminEmail = 'admin@gmail.com';
+
+    try {
+      debugPrint('🔍 Checking if admin user exists: $adminEmail');
+      // Check if admin user already exists
+      final existingUser = await findUserByEmail(adminEmail);
+      if (existingUser != null) {
+        debugPrint('✅ Admin user already exists');
+        return;
+      }
+
+      debugPrint('🛠 Creating default admin user...');
+      // Create default admin user
+      final adminUser = UserModel(
+        id: '1',
+        username: 'admin',
+        email: adminEmail,
+        profileImageUrl: '',
+        bio: 'Admin account',
+        followersCount: 0,
+        followingCount: 0,
+        postsCount: 0,
+        isFollowing: false,
+        password: 'Sree@2005', // Add password for the admin user
+      );
+
+      // Save admin user
+      await saveNewUser(adminUser);
+      debugPrint('✅ Default admin user created successfully');
+    } catch (e) {
+      debugPrint('❌ Error creating default admin user: $e');
+      rethrow;
+    }
+  }
+}

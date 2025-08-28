@@ -37,179 +37,133 @@ class LoginView extends GetView<AuthController> {
                 ),
                 const SizedBox(height: 48.0),
                 
-                // Username Field (only for signup)
-                Obx(() => !controller.isLogin.value
-                    ? CustomTextField(
-                        controller: controller.usernameController,
-                        label: 'Username',
-                        prefixIcon: Icons.person_outline,
-                        onChanged: (value) {
-                          if (controller.formKey.currentState?.validate() ?? false) {
-                            controller.formKey.currentState?.save();
-                          }
-                        },
-                        validator: controller.validateUsername,
-                      )
-                    : const SizedBox.shrink()),
-                if (!controller.isLogin.value) const SizedBox(height: 16.0),
-                
                 // Email Field
                 CustomTextField(
                   controller: controller.emailController,
                   label: 'Email',
-                  keyboardType: TextInputType.emailAddress,
+                  hintText: 'Enter your email',
                   prefixIcon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
                   onChanged: (value) {
                     if (controller.formKey.currentState?.validate() ?? false) {
                       controller.formKey.currentState?.save();
                     }
                   },
-                  validator: controller.validateEmail,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    if (!GetUtils.isEmail(value)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16.0),
-                
+
                 // Password Field
-                CustomTextField(
-                  controller: controller.passwordController,
-                  label: 'Password',
-                  isPassword: true,
-                  prefixIcon: Icons.lock_outline,
-                  onChanged: (value) {
-                    if (controller.formKey.currentState?.validate() ?? false) {
-                      controller.formKey.currentState?.save();
-                    }
-                  },
-                  validator: controller.validatePassword,
+                Obx(
+                  () => CustomTextField(
+                    controller: controller.passwordController,
+                    label: 'Password',
+                    hintText: 'Enter your password',
+                    prefixIcon: Icons.lock_outline,
+                    isPassword: !controller.isPasswordVisible.value,
+                    onChanged: (value) {
+                      if (controller.formKey.currentState?.validate() ?? false) {
+                        controller.formKey.currentState?.save();
+                      }
+                    },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        controller.isPasswordVisible.value
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: controller.togglePasswordVisibility,
+                    ),
+                  ),
                 ),
-                
-                // Confirm Password Field (only for signup)
-                Obx(() => !controller.isLogin.value
-                    ? Column(
-                        children: [
-                          const SizedBox(height: 16.0),
-                          CustomTextField(
-                            controller: controller.confirmPasswordController,
-                            label: 'Confirm Password',
-                            isPassword: true,
-                            prefixIcon: Icons.lock_outline,
-                            onChanged: (value) {
-                              if (controller.formKey.currentState?.validate() ?? false) {
-                                controller.formKey.currentState?.save();
-                              }
-                            },
-                            validator: controller.validateConfirmPassword,
-                          ),
-                        ],
-                      )
-                    : const SizedBox.shrink()),
-                const SizedBox(height: 24.0),
-                
-                const SizedBox(height: 24.0),
-                
-                // Login/Signup Button
-                Obx(() => CustomButton(
-                      onPressed: controller.isLoading.value
-                          ? null
-                          : () async {
-                              final form = controller.formKey.currentState;
-                              if (form == null || !form.validate()) {
-                                debugPrint('Form validation failed');
-                                return;
-                              }
-                              form.save();
-                              try {
-                                await controller.submitForm();
-                              } catch (e) {
-                                debugPrint('Form submission error: $e');
-                              }
-                            },
-                      child: controller.isLoading.value
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              controller.isLogin.value ? 'Log In' : 'Sign Up',
-                              style: const TextStyle(fontSize: 16),
+                const SizedBox(height: 16.0),
+
+                // Login Button
+                Obx(
+                  () => CustomButton(
+                    onPressed: controller.submitForm,
+                    child: controller.isLoading.value
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
-                    )),
+                          )
+                        : const Text('Login'),
+                  ),
+                ),
                 const SizedBox(height: 16.0),
-                
-                const SizedBox(height: 16.0),
-                
-                // Toggle Auth Mode
+
+                // Toggle between Login and Signup (Signup disabled for now)
                 TextButton(
-                  onPressed: controller.isLoading.value
-                      ? null
-                      : () {
-                          controller.toggleAuthMode();
-                        },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  onPressed: () {
+                    Get.snackbar(
+                      'Info',
+                      'Please use the login with the provided mock credentials',
+                      snackPosition: SnackPosition.BOTTOM,
+                    );
+                  },
+                  child: Text(
+                    'Don\'t have an account? Sign Up (Coming Soon)',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                        ),
                   ),
-                  child: Obx(() => Text(
-                    controller.isLogin.value
-                        ? 'Don\'t have an account? Sign up'
-                        : 'Already have an account? Log in',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  )),
                 ),
                 const SizedBox(height: 16.0),
-                
-                // Divider with "or"
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        'OR',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
+
+                // Login Hint
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    'Use the following credentials for login:',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
                 ),
-                const SizedBox(height: 16.0),
-                
-                // Social Login Buttons
-                CustomButton.outlined(
-                  onPressed: () {},
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                Container(
+                  padding: const EdgeInsets.all(12.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Image.asset(
-                        'assets/images/google.png',
-                        height: 24,
-                        width: 24,
-                      ),
-                      const SizedBox(width: 12.0),
-                      const Text('Continue with Google'),
+                      Text('Email: ${AuthController.mockEmail}'),
+                      const SizedBox(height: 4.0),
+                      Text('Password: ${AuthController.mockPassword}'),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12.0),
-                CustomButton.outlined(
-                  onPressed: () {},
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        'assets/images/facebook.png',
-                        height: 24,
-                        width: 24,
-                      ),
-                      const SizedBox(width: 12.0),
-                      const Text('Continue with Facebook'),
-                    ],
+                const SizedBox(height: 16.0),
+
+                // Social Login Hint
+                const Padding(
+                  padding: EdgeInsets.only(top: 16.0),
+                  child: Text(
+                    'Social login coming soon!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontStyle: FontStyle.italic),
                   ),
                 ),
               ],

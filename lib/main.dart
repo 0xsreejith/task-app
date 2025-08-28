@@ -1,19 +1,20 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 // Controllers
 import 'package:socialmedia_clone/app/controllers/theme_controller.dart';
 import 'package:socialmedia_clone/app/controllers/main_controller.dart';
+import 'package:socialmedia_clone/app/modules/feed/controllers/feed_controller.dart';
 
 // Views
 import 'package:socialmedia_clone/app/modules/feed/views/feed_view.dart';
 import 'package:socialmedia_clone/app/modules/profile/views/profile_view.dart';
 
 // Services & Utils
-import 'package:socialmedia_clone/app/data/providers/local/hive_service.dart';
+import 'package:socialmedia_clone/app/services/hive_service.dart';
+import 'package:socialmedia_clone/app/data/providers/local/hive_service.dart'
+    as legacy_hive;
 import 'package:socialmedia_clone/app/routes/app_pages.dart';
 import 'package:socialmedia_clone/app/theme/app_theme.dart';
 import 'package:socialmedia_clone/app/utils/logger.dart';
@@ -22,63 +23,70 @@ import 'package:socialmedia_clone/app/utils/logger.dart';
 import 'package:socialmedia_clone/app/bindings/main_binding.dart';
 
 void main() async {
+  // Ensure Flutter bindings are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive with error handling
   try {
-    // Ensure Flutter bindings are initialized
-    WidgetsFlutterBinding.ensureInitialized();
-    
-    // Initialize Hive with error handling
-    try {
-      await HiveService.init();
-      if (kDebugMode) {
-        print('✅ Hive initialized successfully');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ Error initializing Hive: $e');
-      }
-      // Continue anyway, Hive might still work in a limited capacity
-    }
-    
-    // Initialize controllers
+    debugPrint('🚀 Initializing Hive...');
+    await HiveService.init();
+    // Initialize legacy provider for posts/comments boxes
+    await legacy_hive.HiveService.init();
+    debugPrint('✅ Hive initialized successfully');
+
+    // Initialize theme controller
     Get.put(ThemeController());
-    
+
     // Initialize main controller
     final mainController = Get.put(MainController());
-    
+
     // Wait for initial auth check
-    await mainController.initialAuthCheck;
-    
+    try {
+      debugPrint('🔍 Performing initial auth check...');
+      await mainController.initialAuthCheck;
+      debugPrint('✅ Initial auth check completed');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error during initial auth check: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+
     runApp(const MyApp());
   } catch (e, stackTrace) {
-    debugPrint('Error initializing app: $e');
+    debugPrint('❌ Error initializing app: $e');
     debugPrint('Stack trace: $stackTrace');
-    
+
+    // Show error screen if initialization fails
     runApp(
       MaterialApp(
         home: Scaffold(
           body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'Error initializing app',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  e.toString(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    // Try to restart the app
-                    runApp(const MyApp());
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Initialization Error',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to initialize the app. Please try again later or contact support if the problem persists.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Try to restart the app
+                      runApp(const MyApp());
+                    },
+                    child: const Text('Try Again'),
+                  ),
+                  ],
+              ),
             ),
           ),
         ),
@@ -109,18 +117,12 @@ class _MyAppState extends State<MyApp> {
       if (kDebugMode) {
         print('🔍 Checking authentication status...');
       }
-      
+
       // Add a small delay to ensure Hive is fully initialized
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       final user = await HiveService.getCurrentUser();
-      
-      if (kDebugMode) {
-        print(user != null 
-          ? '✅ User is authenticated: ${user.email}'
-          : '🔐 No authenticated user found');
-      }
-      
+
       initialRoute.value = user != null ? Routes.main : Routes.login;
     } catch (e) {
       if (kDebugMode) {
@@ -138,11 +140,7 @@ class _MyAppState extends State<MyApp> {
     return Obx(() {
       if (!isInitialized.value) {
         return const MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          ),
+          home: Scaffold(body: Center(child: CircularProgressIndicator())),
         );
       }
 
@@ -158,11 +156,8 @@ class _MyAppState extends State<MyApp> {
         initialBinding: MainBinding(),
         unknownRoute: GetPage(
           name: '/not-found',
-          page: () => const Scaffold(
-            body: Center(
-              child: Text('Page not found'),
-            ),
-          ),
+          page: () =>
+              const Scaffold(body: Center(child: Text('Page not found'))),
         ),
       );
     });
@@ -174,6 +169,9 @@ class MainScreen extends GetView<MainController> {
 
   @override
   Widget build(BuildContext context) {
+    // Initialize controllers
+    final feedController = Get.put(FeedController());
+
     return WillPopScope(
       onWillPop: () async {
         // Prevent going back to auth screens
@@ -185,12 +183,16 @@ class MainScreen extends GetView<MainController> {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // Load posts when switching to feed tab
+          if (controller.selectedIndex.value == 0) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              feedController.loadPosts();
+            });
+          }
+
           return IndexedStack(
             index: controller.selectedIndex.value,
-            children: const [
-              FeedView(),
-              ProfileView(),
-            ],
+            children: [const FeedView(), const ProfileView()],
           );
         }),
         bottomNavigationBar: Obx(
@@ -202,10 +204,7 @@ class MainScreen extends GetView<MainController> {
             showUnselectedLabels: true,
             type: BottomNavigationBarType.fixed,
             items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home),
-                label: 'Home',
-              ),
+              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person),
                 label: 'Profile',
@@ -216,6 +215,4 @@ class MainScreen extends GetView<MainController> {
       ),
     );
   }
-
 }
-
