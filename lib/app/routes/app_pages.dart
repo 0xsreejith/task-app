@@ -25,6 +25,23 @@ class AppPages {
 
   static final routes = [
     GetPage(
+      name: '${_Paths.comments}/:postId',
+      page: () {
+        final postId = Get.parameters['postId'] ?? '';
+        return CommentsView(postId: postId);
+      },
+      binding: BindingsBuilder(() {
+        final postId = Get.parameters['postId'] ?? '';
+        if (postId.isNotEmpty) {
+          Get.lazyPut<CommentsController>(
+            () => CommentsController(postId),
+            tag: postId,
+          );
+        }
+      }),
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
       name: _Paths.login,
       page: () => const LoginView(),
       binding: AuthBinding(),
@@ -73,11 +90,15 @@ class AppPages {
         final postId = Get.parameters['postId']!;
         return CommentsView(
           key: ValueKey('comments_$postId'),
+          postId: postId,
         );
       },
       binding: BindingsBuilder(() {
         final postId = Get.parameters['postId']!;
-        Get.put(CommentsController(postId));
+        Get.lazyPut<CommentsController>(
+          () => CommentsController(postId),
+          tag: postId,
+        );
       }),
       middlewares: [AuthMiddleware()],
     ),

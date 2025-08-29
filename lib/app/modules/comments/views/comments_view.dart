@@ -5,7 +5,11 @@ import 'package:socialmedia_clone/app/widgets/loading_indicator.dart';
 import '../controllers/comments_controller.dart';
 
 class CommentsView extends GetView<CommentsController> {
-  const CommentsView({Key? key}) : super(key: key);
+  final String postId;
+  
+  const CommentsView({Key? key, required this.postId}) : super(key: key);
+
+  CommentsController get controller => Get.find<CommentsController>(tag: postId);
 
   @override
   Widget build(BuildContext context) {

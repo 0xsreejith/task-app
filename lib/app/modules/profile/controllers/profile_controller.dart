@@ -1,12 +1,15 @@
+import 'dart:developer';
 import 'dart:io';
+
+import 'package:get/get.dart';
+import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import 'package:get/get.dart';
-import 'package:hive/hive.dart';
 import 'package:socialmedia_clone/app/data/models/post_model.dart';
 import 'package:socialmedia_clone/app/data/models/user_model.dart';
 import 'package:socialmedia_clone/app/services/hive_service.dart' as auth_hive;
+import '../../../../main_controller.dart';
 
 class ProfileController extends GetxController {
   // User data
@@ -86,7 +89,7 @@ class ProfileController extends GetxController {
   // Load user's posts
   Future<void> _loadUserPosts({String? userId}) async {
     try {
-      if (userId == null) {
+      if (userId == null || userId.isEmpty) {
         _userPosts.clear();
         _isLoading.value = false;
         return;
@@ -94,28 +97,55 @@ class ProfileController extends GetxController {
 
       final box = await Hive.openBox('posts');
       final allPosts = box.values.toList();
+      
+      log('Loading posts for user: $userId');
+      log('Total posts in Hive: ${allPosts.length}');
 
-      final userPosts = allPosts
-          .where((post) {
-            if (post is Map) {
-              return post['userId'] == userId;
-            } else if (post is PostModel) {
-              return post.userId == userId;
+      final userPosts = <PostModel>[];
+      
+      for (final post in allPosts) {
+        try {
+          PostModel? postModel;
+          
+          if (post is Map) {
+            // Handle Map format
+            final postMap = Map<String, dynamic>.from(post);
+            if (postMap['userId'] == userId) {
+              try {
+                postModel = PostModel.fromJson(postMap);
+                // Ensure the image URL is properly formatted
+                final imageUrl = postModel.imageUrl;
+                if (imageUrl.startsWith('file:')) {
+                  postModel = postModel.copyWith(
+                    imageUrl: imageUrl.replaceFirst('file:', '')
+                  );
+                }
+                userPosts.add(postModel);
+              } catch (e, stackTrace) {
+                log('Error parsing post: $e\n$stackTrace');
+              }
             }
-            return false;
-          })
-          .map((post) {
-            final postModel = post is Map
-                ? PostModel.fromJson(Map<String, dynamic>.from(post))
-                : post as PostModel;
-            return postModel;
-          })
-          .toList();
-
+          } else if (post is PostModel && post.userId == userId) {
+            // Add the post directly if it's already a PostModel
+            userPosts.add(post);
+          }
+        } catch (e, stackTrace) {
+          log('Error processing post: $e\n$stackTrace');
+        }
+      }
+      
+      // Sort by creation date (newest first)
+      userPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      log('Found ${userPosts.length} posts for user');
       _userPosts.value = userPosts;
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to load posts');
-      rethrow;
+    } catch (e, stackTrace) {
+      log('Error loading user posts: $e\n$stackTrace');
+      Get.snackbar('Error', 'Failed to load posts', 
+          snackPosition: SnackPosition.BOTTOM);
+      _userPosts.clear();
+    } finally {
+      _isLoading.value = false;
     }
   }
 
@@ -136,44 +166,55 @@ class ProfileController extends GetxController {
       if (imageFile != null) {
         try {
           final appDir = await getApplicationDocumentsDirectory();
-          final fileName =
-              'profile_${currentUser.id}${path.extension(imageFile.path)}';
+          final extension = path.extension(imageFile.path);
+          final fileName = 'profile_${currentUser.id}${extension.isEmpty ? '.jpg' : extension}';
           final savedImage = await imageFile.copy('${appDir.path}/$fileName');
           imageUrl = savedImage.path;
-        } catch (e) {
+          log('Profile image saved to: $imageUrl');
+        } catch (e, stackTrace) {
+          log('Error saving profile image: $e\n$stackTrace');
           Get.snackbar(
             'Warning',
             'Failed to save profile image, using previous one',
+            snackPosition: SnackPosition.BOTTOM,
           );
         }
       }
 
       final updatedUser = currentUser.copyWith(
-        username: username,
-        bio: bio,
+        username: username.trim(),
+        bio: bio.trim(),
         profileImageUrl: imageUrl,
       );
 
+      // Save the updated user
       await auth_hive.HiveService.setCurrentUser(updatedUser);
-
       _user.value = updatedUser;
 
-      if (currentUser.username != username) {
+      // Update username in posts if changed
+      if (currentUser.username != username.trim()) {
         await _updatePostsWithNewUsername(
           userId: currentUser.id,
-          newUsername: username,
+          newUsername: username.trim(),
         );
       }
 
+      // Refresh the user profile
       await loadUserProfile(userId: currentUser.id);
 
+      // Show success message
+      Get.snackbar('Success', 'Profile updated successfully', 
+          snackPosition: SnackPosition.BOTTOM);
+          
+      // Close the edit screen
       if (Get.isDialogOpen ?? false) {
         Get.back();
       }
       Get.back();
-      Get.snackbar('Success', 'Profile updated successfully');
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to update profile');
+    } catch (e, stackTrace) {
+      log('Error updating profile: $e\n$stackTrace');
+      Get.snackbar('Error', 'Failed to update profile: ${e.toString()}',
+          snackPosition: SnackPosition.BOTTOM);
     } finally {
       _isLoading.value = false;
     }
@@ -218,10 +259,16 @@ class ProfileController extends GetxController {
     }
   }
 
-  // Logout
+  // Logout - Uses MainController to handle the logout process
   Future<void> logout() async {
-    await auth_hive.HiveService.deleteCurrentUser();
-    // Do not navigate; middleware will redirect when needed
+    try {
+      // Use MainController to handle the logout process
+      final mainController = Get.find<MainController>();
+      await mainController.logout();
+    } catch (e) {
+      log('Error in profile logout: $e');
+      rethrow;
+    }
   }
 
   // Pick and update profile image

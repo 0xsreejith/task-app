@@ -74,8 +74,8 @@ class CreatePostController extends GetxController {
       // Copy the image to app's documents directory
       await selectedImage.value!.copy(newImagePath);
 
-      // Store the path relative to the app's documents directory
-      final String imageUrl = fileName;
+      // Store the full path for the image
+      final String imageUrl = newImagePath;
 
       final newPost = PostModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -95,8 +95,8 @@ class CreatePostController extends GetxController {
       // Refresh the feed
       if (Get.isRegistered<FeedController>()) {
         final feedController = Get.find<FeedController>();
-        // Add the new post to the beginning of the list
-        feedController.posts.insert(0, newPost);
+        // Trigger a full refresh to ensure all posts are loaded
+        await feedController.refreshPosts();
       }
 
       // Clear the form

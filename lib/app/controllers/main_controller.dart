@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:socialmedia_clone/app/data/models/user_model.dart';
 import 'package:socialmedia_clone/app/routes/app_pages.dart';
 import 'package:socialmedia_clone/app/services/hive_service.dart';
+import 'package:socialmedia_clone/app/modules/feed/controllers/feed_controller.dart';
 
 class MainController extends GetxController {
   final RxInt selectedIndex = 0.obs;
@@ -48,6 +49,11 @@ class MainController extends GetxController {
 
   void _handleTabChange(int index) {
     // Handle any tab-specific logic here if needed
+  }
+
+  // Public method to manually refresh auth state
+  Future<void> refreshAuthState() async {
+    await _checkAuthState();
   }
 
   Future<void> _checkAuthState() async {
@@ -105,11 +111,42 @@ class MainController extends GetxController {
 
   Future<void> logout() async {
     try {
+      debugPrint('🔄 Starting logout process...');
+      
+      // Clear user data
       await HiveService.deleteCurrentUser();
       setUser(null);
-      // Let middleware handle redirection
+      
+      // Clear any cached data
+      if (Get.isRegistered<FeedController>()) {
+        final feedController = Get.find<FeedController>();
+        feedController.posts.clear();
+      }
+      
+      // Clear all routes and navigate to login screen
+      await Future.delayed(Duration.zero); // Ensure UI updates
+      Get.offAllNamed(
+        Routes.login,
+        predicate: (route) => false, // Remove all previous routes
+      );
+      
+      debugPrint('✅ Logout completed successfully');
+      
+      // Show success message
+      Get.snackbar(
+        'Success',
+        'Logged out successfully',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+      );
     } catch (e) {
-      debugPrint('Error during logout: $e');
+      debugPrint('❌ Error during logout: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to logout. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
       rethrow;
     }
   }

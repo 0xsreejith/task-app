@@ -6,37 +6,37 @@ part 'user_model.g.dart';
 class UserModel extends HiveObject {
   @HiveField(0)
   final String id;
-  
+
   @HiveField(1)
   final String username;
-  
+
   @HiveField(2)
   final String email;
-  
+
   @HiveField(3, defaultValue: '')
   final String profileImageUrl;
-  
+
   @HiveField(4, defaultValue: '')
   final String bio;
-  
+
   @HiveField(5, defaultValue: 0)
   final int followersCount;
-  
+
   @HiveField(6, defaultValue: 0)
   final int followingCount;
-  
+
   @HiveField(7, defaultValue: 0)
   final int postsCount;
-  
+
   @HiveField(8, defaultValue: 0)
   final int createdAt;
-  
-  @HiveField(8, defaultValue: false)
+
+  @HiveField(9, defaultValue: false)
   final bool isFollowing;
-  
+
   @HiveField(10, defaultValue: '')
   final String password;
-  
+
   UserModel({
     required this.id,
     required this.username,
@@ -50,12 +50,13 @@ class UserModel extends HiveObject {
     this.isFollowing = false,
     this.password = '',
   });
-  
+
   // Convert from JSON
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] ?? '',
-      createdAt: json['createdAt'] as int? ?? DateTime.now().millisecondsSinceEpoch,
+      createdAt:
+          json['createdAt'] as int? ?? DateTime.now().millisecondsSinceEpoch,
       username: json['username'] ?? '',
       email: json['email'] ?? '',
       profileImageUrl: json['profileImageUrl'] ?? '',
@@ -67,7 +68,7 @@ class UserModel extends HiveObject {
       password: json['password'] ?? '',
     );
   }
-  
+
   // Convert to JSON
   Map<String, dynamic> toJson() {
     return {
@@ -83,7 +84,7 @@ class UserModel extends HiveObject {
       'password': password,
     };
   }
-  
+
   // Create a copy with updated fields
   UserModel copyWith({
     String? id,
@@ -108,7 +109,7 @@ class UserModel extends HiveObject {
       isFollowing: isFollowing ?? this.isFollowing,
     );
   }
-  
+
   // Toggle follow status
   UserModel toggleFollow() {
     return copyWith(

@@ -1,27 +1,44 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:socialmedia_clone/app/data/models/user_model.dart';
+import 'package:socialmedia_clone/app/data/models/comment_model.dart' as comment_model;
 
 class HiveService {
+  // Box names
   static const String _userBox = 'user_box';
+  static const String _commentsBox = 'comments_box';
+  
+  // Keys
   static const String _currentUserKey = 'current_user';
-  static const String _usersListKey = 'users_list';
+  static const String _commentsKey = 'comments';
 
+  // Box instances
   static late Box _box;
+  static late Box _commentsStorage;
 
-  /// Initialize Hive and open the user box
+  /// Initialize Hive and open boxes
   static Future<void> init() async {
-    await Hive.initFlutter();
-    _box = await Hive.openBox(_userBox);
-
-    // Create default admin user if it doesn't exist
-    await _createDefaultAdminUser();
+    try {
+      await Hive.initFlutter();
+      
+      // Register adapters
+      if (!Hive.isAdapterRegistered(3)) {
+        Hive.registerAdapter(comment_model.CommentAdapter());
+      }
+      
+      _box = await Hive.openBox(_userBox);
+      _commentsStorage = await Hive.openBox(_commentsBox);
+      
+      debugPrint('✅ HiveService initialized');
+    } catch (e) {
+      debugPrint('❌ Error initializing Hive: $e');
+      rethrow;
+    }
   }
 
-  /// Save the current user to Hive
+  // User related methods
   static Future<void> setCurrentUser(dynamic user) async {
     try {
-      // Convert to UserModel if it's a map
       final UserModel userModel;
       if (user is UserModel) {
         userModel = user;
@@ -32,16 +49,8 @@ class HiveService {
       }
 
       debugPrint('💾 Saving current user to Hive: ${userModel.email}');
-
-      // Save as Map<String, dynamic> to avoid requiring Hive adapters
       await _box.put(_currentUserKey, userModel.toJson());
       debugPrint('✅ Successfully saved current user');
-
-      // Verify the user was saved
-      final savedUser = _box.get(_currentUserKey);
-      debugPrint(
-        '🔍 Current user in Hive: ${savedUser != null ? savedUser.toString() : 'NULL'}',
-      );
     } catch (e, stackTrace) {
       debugPrint('❌ Error saving current user: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -49,26 +58,24 @@ class HiveService {
     }
   }
 
-  /// Get the current user from Hive
   static Future<UserModel?> getCurrentUser() async {
-    final userData = _box.get(_currentUserKey);
-    if (userData == null) return null;
-
     try {
+      final userData = _box.get(_currentUserKey);
+      if (userData == null) return null;
+
       if (userData is UserModel) {
         return userData;
       } else if (userData is Map) {
-        final map = Map<String, dynamic>.from(userData as Map);
-        return UserModel.fromJson(map);
+        return UserModel.fromJson(Map<String, dynamic>.from(userData));
       }
       return null;
     } catch (e) {
-      debugPrint('Error parsing user data: $e');
+      debugPrint('❌ Error getting current user: $e');
       return null;
     }
   }
 
-  /// Get the current user from Hive synchronously
+  /// Get the current user synchronously
   static UserModel? getCurrentUserSync() {
     try {
       final userData = _box.get(_currentUserKey);
@@ -77,134 +84,88 @@ class HiveService {
       if (userData is UserModel) {
         return userData;
       } else if (userData is Map) {
-        final map = Map<String, dynamic>.from(userData as Map);
-        return UserModel.fromJson(map);
+        return UserModel.fromJson(Map<String, dynamic>.from(userData));
       }
       return null;
     } catch (e) {
-      debugPrint('Error parsing user data sync: $e');
+      debugPrint('❌ Error getting current user (sync): $e');
       return null;
     }
   }
 
   /// Delete the current user from Hive
   static Future<void> deleteCurrentUser() async {
-    await _box.delete(_currentUserKey);
-  }
-
-  /// Clear all data from Hive
-  static Future<void> clearAll() async {
-    await _box.clear();
+    try {
+      await _box.delete(_currentUserKey);
+      debugPrint('✅ Current user deleted successfully');
+    } catch (e) {
+      debugPrint('❌ Error deleting current user: $e');
+      rethrow;
+    }
   }
 
   /// Find a user by email
   static Future<UserModel?> findUserByEmail(String email) async {
     try {
-      debugPrint('🔍 Searching for user with email: $email');
-      final users = await getUsers();
-      debugPrint('📋 Found ${users.length} users in database');
-
-      for (var user in users) {
-        debugPrint(' - ${user.email} (ID: ${user.id})');
+      final currentUser = await getCurrentUser();
+      if (currentUser != null && currentUser.email == email) {
+        return currentUser;
       }
-
-      try {
-        final foundUser = users.firstWhere(
-          (user) => user.email.toLowerCase() == email.toLowerCase(),
-        );
-        debugPrint('✅ Found user: ${foundUser.email}');
-        return foundUser;
-      } catch (e) {
-        debugPrint('❌ User not found with email: $email');
-        return null;
-      }
+      return null;
     } catch (e) {
       debugPrint('❌ Error finding user by email: $e');
       return null;
     }
   }
 
-  /// Get all users
-  static Future<List<UserModel>> getUsers() async {
-    final dynamic raw = _box.get(_usersListKey, defaultValue: <dynamic>[]);
-
-    if (raw is List) {
-      final List<UserModel> users = [];
-      for (final dynamic item in raw) {
-        try {
-          if (item is UserModel) {
-            users.add(item);
-          } else if (item is Map) {
-            final map = Map<String, dynamic>.from(item as Map);
-            users.add(UserModel.fromJson(map));
-          } else {
-            debugPrint(
-              '⚠️ Unsupported user list item type: ${item.runtimeType}',
-            );
-          }
-        } catch (e) {
-          debugPrint('❌ Error parsing user list item: $e');
-        }
-      }
-      return users;
-    }
-
-    // Fallback: unexpected storage format
-    debugPrint(
-      '⚠️ Unexpected users list format: ${raw.runtimeType}. Returning empty list.',
-    );
-    return <UserModel>[];
-  }
-
-  /// Save a new user
-  static Future<void> saveNewUser(UserModel user) async {
-    final users = await getUsers();
-
-    // Check if user with same email already exists
-    if (users.any((u) => u.email.toLowerCase() == user.email.toLowerCase())) {
-      throw Exception('User with this email already exists');
-    }
-
-    // Add new user to the list
-    users.add(user);
-
-    // Save updated list as List<Map<String, dynamic>> for consistency
-    await _box.put(_usersListKey, users.map((u) => u.toJson()).toList());
-  }
-
-  /// Create a default admin user for testing
-  static Future<void> _createDefaultAdminUser() async {
-    final adminEmail = 'admin@gmail.com';
-
+  // Comment related methods
+  static Future<void> saveComment(comment_model.Comment comment) async {
     try {
-      debugPrint('🔍 Checking if admin user exists: $adminEmail');
-      // Check if admin user already exists
-      final existingUser = await findUserByEmail(adminEmail);
-      if (existingUser != null) {
-        debugPrint('✅ Admin user already exists');
-        return;
-      }
-
-      debugPrint('🛠 Creating default admin user...');
-      // Create default admin user
-      final adminUser = UserModel(
-        id: '1',
-        username: 'admin',
-        email: adminEmail,
-        profileImageUrl: '',
-        bio: 'Admin account',
-        followersCount: 0,
-        followingCount: 0,
-        postsCount: 0,
-        isFollowing: false,
-        password: 'Sree@2005', // Add password for the admin user
-      );
-
-      // Save admin user
-      await saveNewUser(adminUser);
-      debugPrint('✅ Default admin user created successfully');
+      final comments = _commentsStorage.get(_commentsKey, defaultValue: <Map>[]) as List;
+      comments.add(comment.toJson());
+      await _commentsStorage.put(_commentsKey, comments);
+      debugPrint('✅ Comment saved: ${comment.id}');
     } catch (e) {
-      debugPrint('❌ Error creating default admin user: $e');
+      debugPrint('❌ Error saving comment: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all comments for a specific post
+  static List<comment_model.Comment> getCommentsForPost(String postId) {
+    try {
+      final comments = _commentsStorage.get(_commentsKey, defaultValue: <Map>[]) as List;
+      return comments
+          .map((e) => comment_model.Comment.fromJson(Map<String, dynamic>.from(e)))
+          .where((comment) => comment.postId == postId)
+          .toList();
+    } catch (e) {
+      debugPrint('❌ Error getting comments for post: $e');
+      return [];
+    }
+  }
+
+  /// Delete a comment by its ID
+  static Future<void> deleteComment(String commentId) async {
+    try {
+      final comments = _commentsStorage.get(_commentsKey, defaultValue: <Map>[]) as List;
+      comments.removeWhere((c) => c['id'] == commentId);
+      await _commentsStorage.put(_commentsKey, comments);
+      debugPrint('✅ Comment deleted: $commentId');
+    } catch (e) {
+      debugPrint('❌ Error deleting comment: $e');
+      rethrow;
+    }
+  }
+
+  // Clear all data (for testing/logout)
+  static Future<void> clearAllData() async {
+    try {
+      await _box.clear();
+      await _commentsStorage.clear();
+      debugPrint('✅ Cleared all Hive data');
+    } catch (e) {
+      debugPrint('❌ Error clearing Hive data: $e');
       rethrow;
     }
   }

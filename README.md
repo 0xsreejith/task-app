@@ -1,88 +1,171 @@
-# Social Media Clone (Flutter)
+# 📱 Social Media Clone (Flutter)
 
-A lightweight social media sample app built with Flutter + GetX and Hive. It demonstrates:
+A feature-rich social media application built with Flutter, GetX, and Hive. This project demonstrates modern Flutter development practices including state management, local storage, and clean architecture.
 
-- Mock authentication with persistent session
-- Feed with posts (image + caption)
-- Like/Unlike posts with live count updates
-- Create new post (pick image from gallery + caption)
-- Profile page with basic details and posts
-- Local storage using Hive (no backend required)
+![Social Media Clone](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+![GetX](https://img.shields.io/badge/GetX-8E0DFF?style=for-the-badge&logo=flutter&logoColor=white)
+![Hive](https://img.shields.io/badge/Hive-FF6B00?style=for-the-badge&logo=hive&logoColor=white)
 
-## Tech Stack
+## ✨ Features
 
-- Flutter (stable)
-- State management: GetX
-- Local storage: Hive + hive_flutter
-- Image picking: image_picker
+- **User Authentication**
+  - Secure login/logout
+  - Persistent sessions with Hive
+  - Auto-login functionality
 
-## Mock Login Credentials
+- **Feed**
+  - Infinite scroll feed
+  - Like/unlike posts with animations
+  - Pull-to-refresh
+  - Post details with comments
 
-- Email: `admin@gmail.com`
-- Password: `Sree@2005`
+- **Posts**
+  - Create posts with images and captions
+  - Image picking from gallery
+  - Responsive post layout
 
-An admin user is auto-seeded on first launch.
+- **Profile**
+  - User profile with posts grid
+  - Edit profile information
+  - Profile statistics
 
-## Project Structure (high-level)
+- **Search**
+  - Search for users and posts
+  - Real-time search results
 
-- `lib/main.dart`: App bootstrap, theme, routes, bindings
-- `lib/app/routes`: Route table and names
-- `lib/app/middleware/auth_middleware.dart`: Route guard (auth)
-- `lib/app/services/hive_service.dart`: Auth/session storage (current user + users list)
-- `lib/app/data/providers/local/hive_service.dart`: Legacy provider for posts/comments/settings boxes
-- `lib/app/modules/*`: Feature modules (auth, feed, create_post, profile, comments, search)
-  - `controllers/`: GetX controllers
-  - `views/`: Screens
-  - `bindings/`: DI wiring
-- `lib/app/widgets`: Reusable UI widgets (post tile, inputs, buttons)
+## 🛠 Tech Stack
 
-## Features
+- **Framework**: Flutter (stable)
+- **State Management**: GetX
+- **Local Storage**: Hive
+- **Image Picker**: image_picker
+- **Dependency Injection**: GetX Bindings
+- **Routing**: GetX Navigation
+- **UI Components**: Custom widgets with Material Design 3
 
-- Login (mock) with session persisted in Hive
-- Auto-redirect to feed if session exists
-- Feed lists posts from local Hive box
-- Pull-to-refresh feed
-- Like/unlike posts, stored locally
-- Create post from gallery + caption (saved locally)
-- Profile view shows user info and user posts
+## 📱 Screenshots
 
-## Running the App
+| Login Screen | Feed | Create Post | Profile |
+|--------------|------|-------------|---------|
+| <img src="screenshots/login.png" width=200> | <img src="screenshots/feed.png" width=200> | <img src="screenshots/create_post.png" width=200> | <img src="screenshots/profile.png" width=200> |
 
-1. Install Flutter SDK and Android/iOS tooling
-2. Fetch packages:
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Flutter SDK (latest stable)
+- Android Studio / Xcode (for emulators)
+- VS Code / Android Studio (for development)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/0xsreejith/task-app.git
+   cd task-app
+   ```
+
+2. **Install dependencies**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Run the app**
+   ```bash
+   flutter run
+   ```
+
+### Mock Login Credentials
+
+- **Email**: `admin@gmail.com`
+- **Password**: `Sree@2005`
+
+> An admin user is auto-seeded on first launch.
+
+## 🏗 Project Structure
 
 ```
-flutter pub get
+lib/
+├── app/
+│   ├── bindings/          # Dependency injection
+│   ├── controllers/       # Global controllers
+│   ├── data/              # Data layer
+│   │   ├── models/        # Data models
+│   │   └── providers/     # Data providers
+│   ├── modules/           # Feature modules
+│   │   ├── auth/          # Authentication
+│   │   ├── feed/          # Posts feed
+│   │   ├── profile/       # User profile
+│   │   ├── search/        # Search functionality
+│   │   └── create_post/   # Create new posts
+│   ├── routes/            # App routes
+│   ├── services/          # Core services
+│   ├── theme/             # App theming
+│   └── widgets/           # Reusable widgets
+├── main.dart              # App entry point
+└── main_controller.dart   # Main controller
 ```
 
-3. Run on device/emulator:
+## 🔧 Configuration
 
+### Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# App Configuration
+APP_NAME="Social Media Clone"
+APP_VERSION=1.0.0
+
+# API Configuration (if applicable in future)
+# API_BASE_URL=https://api.example.com
+# API_KEY=your_api_key_here
 ```
-flutter run
+
+## 🧪 Testing
+
+Run the following command to execute tests:
+
+```bash
+flutter test
 ```
 
-If you see dependency version notices, you can safely ignore them for this mock app.
+## 🐛 Debugging
 
-## Data & Storage
+Common issues and solutions:
 
-- Auth/session (current user + users list): `lib/app/services/hive_service.dart`
-  - Stores current user as `Map<String, dynamic>` to avoid custom Hive adapters
-  - Auto-seeds admin user `admin@gmail.com`
-- Posts/Comments/Settings: `lib/app/data/providers/local/hive_service.dart`
-  - Opens boxes: `auth`, `users`, `app_settings`, `posts`, `comments`
-  - Posts are saved as `PostModel` or JSON maps (code handles both)
+1. **Navigation Loops**
+   - Perform a hot restart after clean install
+   - Ensure proper route guards in `auth_middleware.dart`
 
-## Notes
+2. **Missing Dependencies**
+   ```bash
+   flutter pub get
+   flutter pub upgrade
+   ```
 
-- This is a local-only demo with mock auth and local storage
-- No backend service is required
-- UI is kept clean and simple to focus on core flows
+3. **Build Failures**
+   ```bash
+   flutter clean
+   flutter pub get
+   ```
 
-## Common Issues
+## 📝 License
 
-- If you get navigation loops, perform a hot restart after clean install
-- If posts don’t appear, ensure the app has gallery permission and retry creating a post
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## License
+## 🙏 Acknowledgments
 
-MIT
+- [Flutter](https://flutter.dev/)
+- [GetX](https://pub.dev/packages/get)
+- [Hive](https://pub.dev/packages/hive)
+
+## 👨‍💻 Author
+
+[Sreejith](https://github.com/0xsreejith)
+
+---
+
+<div align="center">
+  Made with ❤️ using Flutter
+</div>

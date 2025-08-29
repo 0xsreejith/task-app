@@ -23,9 +23,17 @@ class FeedView extends GetView<FeedController> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              final mainController = Get.find<MainController>();
-              mainController.logout();
+            onPressed: () async {
+              try {
+                final mainController = Get.find<MainController>();
+                await mainController.logout();
+              } catch (e) {
+                Get.snackbar(
+                  'Error',
+                  'Failed to logout: $e',
+                  snackPosition: SnackPosition.BOTTOM,
+                );
+              }
             },
             tooltip: 'Logout',
           ),
@@ -84,10 +92,48 @@ class FeedView extends GetView<FeedController> {
                     post: post,
                     onLike: () => controller.toggleLike(post.id),
                     onComment: () {
+                      debugPrint('=== onComment callback triggered ===');
+                      final mainController = Get.find<MainController>();
+                      
+                      // Debug info
+                      debugPrint('User state - isAuthenticated: ${mainController.isAuthenticated.value}');
+                      debugPrint('User object: ${mainController.user.value?.toJson()}');
+                      
+                      if (mainController.user.value == null) {
+                        debugPrint('User is null, showing login dialog');
+                        Get.dialog(
+                          AlertDialog(
+                            title: const Text('Login Required'),
+                            content: const Text('You need to be logged in to comment. Would you like to log in now?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Get.back(),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Get.back();
+                                  Get.toNamed(Routes.login);
+                                },
+                                child: const Text('Log In'),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                      
+                      // User is logged in, navigate to comments
+                      debugPrint('Navigating to comments for post ${post.id}');
+                      
+                      // Navigate to comments with proper route format
                       Get.toNamed(
                         '${Routes.comments}/${post.id}',
                         arguments: post,
                       );
+                      
+                      // Force a refresh of the auth state
+                      mainController.refreshAuthState();
                     },
                     onProfileTap: () {
                       final userId = post.userId;

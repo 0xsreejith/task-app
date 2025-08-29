@@ -25,14 +25,16 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       followersCount: fields[5] == null ? 0 : fields[5] as int,
       followingCount: fields[6] == null ? 0 : fields[6] as int,
       postsCount: fields[7] == null ? 0 : fields[7] as int,
-      isFollowing: fields[8] == null ? false : fields[8] as bool,
+      createdAt: fields[8] == null ? 0 : fields[8] as int,
+      isFollowing: fields[9] == null ? false : fields[9] as bool,
+      password: fields[10] == null ? '' : fields[10] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -50,7 +52,11 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       ..writeByte(7)
       ..write(obj.postsCount)
       ..writeByte(8)
-      ..write(obj.isFollowing);
+      ..write(obj.createdAt)
+      ..writeByte(9)
+      ..write(obj.isFollowing)
+      ..writeByte(10)
+      ..write(obj.password);
   }
 
   @override

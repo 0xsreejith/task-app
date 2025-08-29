@@ -1,14 +1,76 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:socialmedia_clone/app/controllers/main_controller.dart';
 import 'package:socialmedia_clone/app/data/models/post_model.dart';
+import 'package:socialmedia_clone/app/routes/app_pages.dart';
 
 class PostWidget extends StatelessWidget {
   final PostModel post;
   final VoidCallback onLike;
   final VoidCallback onComment;
+
+  Future<void> _handleCommentTap() async {
+    try {
+      debugPrint('=== Comment button tapped ===');
+      final mainController = Get.find<MainController>();
+      
+      // Refresh auth state to ensure it's up to date
+      await mainController.refreshAuthState();
+      
+      // Debug: Print current user and auth state
+      debugPrint('Current user: ${mainController.user.value?.toJson()}');
+      debugPrint('isAuthenticated: ${mainController.isAuthenticated.value}');
+      debugPrint('User value is null: ${mainController.user.value == null}');
+      
+      // If user is logged in, proceed with comment action
+      if (mainController.user.value != null && mainController.isAuthenticated.value) {
+        debugPrint('User is authenticated, proceeding with comment');
+        onComment();
+        return;
+      }
+      
+      // If we get here, user is not properly authenticated
+      debugPrint('User not properly authenticated, showing login prompt');
+      
+      // Show login prompt
+      final result = await Get.dialog<bool>(
+        AlertDialog(
+          title: const Text('Login Required'),
+          content: const Text('You need to be logged in to comment. Would you like to log in now?'),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Get.back(result: true),
+              child: const Text('Log In'),
+            ),
+          ],
+        ),
+      );
+
+      if (result == true) {
+        // Navigate to login screen
+        Get.toNamed(Routes.login);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error in _handleCommentTap: $e');
+      debugPrint('Stack trace: $stackTrace');
+      Get.snackbar(
+        'Error',
+        'Failed to process comment action. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
+    }
+  }
   final VoidCallback onProfileTap;
   final bool showFullCaption;
 
@@ -45,6 +107,7 @@ class PostWidget extends StatelessWidget {
   Widget _buildPostImage(ThemeData theme) {
     // Handle empty or null image URL
     if (post.imageUrl.isEmpty) {
+      debugPrint('Post ${post.id}: Empty image URL');
       return _buildErrorWidget();
     }
 
@@ -56,75 +119,135 @@ class PostWidget extends StatelessWidget {
         height: 300,
         fit: BoxFit.cover,
         placeholder: (context, url) => _buildLoadingWidget(),
-        errorWidget: (context, url, error) => _buildErrorWidget(),
-      );
-    }
-    
-    // Handle file:// URIs
-    if (post.imageUrl.startsWith('file:')) {
-      try {
-        return Image.file(
-          File(Uri.parse(post.imageUrl).toFilePath()),
-          width: double.infinity,
-          height: 300,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
-        );
-      } catch (e) {
-        debugPrint('Error loading file URI: $e');
-        return _buildErrorWidget();
-      }
-    }
-    
-    // Handle direct file paths
-    if (post.imageUrl.startsWith('/') || post.imageUrl.startsWith('storage/')) {
-      try {
-        return Image.file(
-          File(post.imageUrl),
-          width: double.infinity,
-          height: 300,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
-        );
-      } catch (e) {
-        debugPrint('Error loading file: $e');
-        return _buildErrorWidget();
-      }
-    }
-    
-    // Handle legacy post_ prefixed filenames
-    if (post.imageUrl.startsWith('post_')) {
-      return FutureBuilder<String>(
-        future: _getLocalImagePath(post.imageUrl),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
-            return Image.file(
-              File(snapshot.data!), 
-              width: double.infinity,
-              height: 300,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
-            );
-          }
-          return _buildLoadingWidget();
+        errorWidget: (context, url, error) {
+          debugPrint('Failed to load network image: $url, error: $error');
+          return _buildErrorWidget();
         },
       );
     }
     
-    // Fallback to network image if no prefix matches
-    return CachedNetworkImage(
-      imageUrl: post.imageUrl,
-      width: double.infinity,
-      height: 300,
-      fit: BoxFit.cover,
-      placeholder: (context, url) => _buildLoadingWidget(),
-      errorWidget: (context, url, error) => _buildErrorWidget(),
+    // For local files, use a FutureBuilder to handle async operations
+    return FutureBuilder<File?>(
+      future: _getLocalImageFile(post.imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          if (snapshot.hasData && snapshot.data != null) {
+            return Image.file(
+              snapshot.data!,
+              width: double.infinity,
+              height: 300,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('Error loading file: $error');
+                return _buildErrorWidget();
+              },
+            );
+          }
+          return _buildErrorWidget();
+        }
+        return _buildLoadingWidget();
+      },
     );
   }
 
-  Future<String> _getLocalImagePath(String fileName) async {
-    final appDir = await getApplicationDocumentsDirectory();
-    return '${appDir.path}/$fileName';
+  Future<File?> _getLocalImageFile(String imageUrl) async {
+    try {
+      String? filePath;
+      
+      // Handle file:// URIs
+      if (imageUrl.startsWith('file:')) {
+        filePath = Uri.parse(imageUrl).toFilePath();
+        debugPrint('Loading file URI: $filePath');
+      } 
+      // Handle direct file paths
+      else {
+        filePath = imageUrl;
+        debugPrint('Loading direct file: $filePath');
+      }
+      
+      // Try to resolve the file
+      final file = File(filePath);
+      
+      // Check if file exists
+      if (file.existsSync()) {
+        return file;
+      }
+      
+      // Try to find the file in the app's documents directory
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = path.basename(filePath);
+        final localFile = File('${appDir.path}/$fileName');
+        
+        if (localFile.existsSync()) {
+          return localFile;
+        } else {
+          debugPrint('File does not exist: ${localFile.path}');
+        }
+      } catch (e) {
+        debugPrint('Error checking app directory: $e');
+      }
+      
+      return null;
+    } catch (e, stackTrace) {
+      debugPrint('Error getting local image file ($imageUrl): $e\n$stackTrace');
+      return null;
+    }
+  }
+
+
+  Future<void> _reportPost() async {
+    try {
+      final result = await Get.dialog<bool>(
+        AlertDialog(
+          title: const Text('Report Post'),
+          content: const Text('Are you sure you want to report this post?'),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Get.back(result: true),
+              child: const Text('Report', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+
+      if (result == true) {
+        // Show loading indicator
+        Get.dialog(
+          const Center(child: CircularProgressIndicator()),
+          barrierDismissible: false,
+        );
+
+        // Simulate API call to report the post
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Close loading dialog
+        Get.back();
+
+        // Show success message
+        Get.snackbar(
+          'Report Submitted',
+          'Thank you for reporting this post. We will review it shortly.',
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (Get.isDialogOpen ?? false) Get.back();
+      
+      // Show error message
+      Get.snackbar(
+        'Error',
+        'Failed to report post. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   void _showPostOptions(BuildContext context) {
@@ -138,7 +261,7 @@ class PostWidget extends StatelessWidget {
             title: const Text('Report Post', style: TextStyle(color: Colors.red)),
             onTap: () {
               Navigator.pop(context);
-              // TODO: Implement report functionality
+              _reportPost();
             },
           ),
         ],
@@ -156,33 +279,76 @@ class PostWidget extends StatelessWidget {
     );
   }
   
-  ImageProvider _getProfileImageProvider(String imageUrl) {
-    // Handle network images
-    if (imageUrl.startsWith('http') || imageUrl.startsWith('https')) {
-      return CachedNetworkImageProvider(
-        imageUrl,
-        errorListener: (err) => const Icon(Icons.error),
-      );
-    } 
-    // Handle file paths (with or without file:// prefix)
-    else if (imageUrl.startsWith('file:') || imageUrl.startsWith('/')) {
-      try {
-        final file = imageUrl.startsWith('file:') 
-            ? File(Uri.parse(imageUrl).toFilePath())
-            : File(imageUrl);
-        return FileImage(file);
-      } catch (e) {
-        debugPrint('Error loading profile image: $e');
-        // Return a transparent image provider as fallback
-        return const AssetImage('assets/images/placeholder.png');
+  Future<ImageProvider?> _getProfileImage(String imageUrl) async {
+    if (imageUrl.isEmpty) {
+      debugPrint('Post: Empty profile image URL provided');
+      return null;
+    }
+
+    try {
+      // Handle network images
+      if (imageUrl.startsWith('http')) {
+        debugPrint('Post: Loading network image: $imageUrl');
+        return NetworkImage(imageUrl);
       }
+      
+      // Handle file URIs
+      if (imageUrl.startsWith('file:')) {
+        debugPrint('Post: Loading file URI: $imageUrl');
+        final filePath = Uri.parse(imageUrl).toFilePath();
+        final file = File(filePath);
+        if (await file.exists()) {
+          return FileImage(file);
+        }
+      }
+      
+      // Handle direct file paths
+      if (imageUrl.startsWith('/') || imageUrl.startsWith('storage/')) {
+        debugPrint('Post: Loading direct file: $imageUrl');
+        final file = File(imageUrl);
+        if (await file.exists()) {
+          return FileImage(file);
+        }
+      }
+      
+      // Handle content URIs (common for gallery images on Android)
+      if (imageUrl.startsWith('content:')) {
+        debugPrint('Post: Loading content URI: $imageUrl');
+        return NetworkImage(imageUrl);
+      }
+      
+      debugPrint('Post: Unsupported image URL format: $imageUrl');
+      return null;
+    } catch (e, stackTrace) {
+      debugPrint('Error loading profile image ($imageUrl): $e\n$stackTrace');
+      return null;
+    }
+  }
+
+  
+  // Helper method to get image provider synchronously
+  ImageProvider _getProfileImageProvider(String imageUrl) {
+    if (imageUrl.isEmpty) {
+      return const AssetImage('assets/images/placeholder.png');
+    }
+
+    try {
+      if (imageUrl.startsWith('http')) {
+        return NetworkImage(imageUrl);
+      } else if (imageUrl.startsWith('file:')) {
+        return FileImage(File(Uri.parse(imageUrl).toFilePath()));
+      } else if (imageUrl.startsWith('/') || imageUrl.startsWith('storage/')) {
+        return FileImage(File(imageUrl));
+      } else if (imageUrl.startsWith('content:')) {
+        return NetworkImage(imageUrl);
+      }
+    } catch (e) {
+      debugPrint('Error in _getProfileImageProvider: $e');
     }
     
-    // Fallback to a placeholder if the URL format is not recognized
-    debugPrint('Unsupported profile image URL format: $imageUrl');
     return const AssetImage('assets/images/placeholder.png');
   }
-  
+
   Widget _buildLoadingWidget() {
     return Container(
       height: 300,
@@ -196,6 +362,8 @@ class PostWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mainController = Get.find<MainController>();
+    final currentUserAvatar = mainController.user.value?.profileImageUrl ?? '';
     
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0),
@@ -214,14 +382,38 @@ class PostWidget extends StatelessWidget {
                 // User avatar
                 GestureDetector(
                   onTap: onProfileTap,
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundImage: post.userAvatar.isNotEmpty
-                        ? _getProfileImageProvider(post.userAvatar)
-                        : null,
-                    child: post.userAvatar.isEmpty
-                        ? const Icon(Icons.person)
-                        : null,
+                  child: FutureBuilder<ImageProvider?>(
+                    future: _getProfileImage(post.userAvatar.isNotEmpty ? post.userAvatar : currentUserAvatar),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.done) {
+                        return CircleAvatar(
+                          radius: 20,
+                          backgroundImage: snapshot.data,
+                          onBackgroundImageError: (exception, stackTrace) {
+                            debugPrint('Error loading profile image: $exception');
+                          },
+                          child: snapshot.data == null
+                              ? const Icon(Icons.person)
+                              : null,
+                        );
+                      }
+                      // Show the current user's profile image as a fallback while loading
+                      if (currentUserAvatar.isNotEmpty) {
+                        return CircleAvatar(
+                          radius: 20,
+                          backgroundImage: _getProfileImageProvider(currentUserAvatar),
+                          onBackgroundImageError: (exception, stackTrace) {
+                            debugPrint('Error loading fallback profile image: $exception');
+                          },
+                          child: const Icon(Icons.person),
+                        );
+                      }
+                      // If no fallback image is available, show a simple avatar
+                      return const CircleAvatar(
+                        radius: 20,
+                        child: Icon(Icons.person),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 12.0),
@@ -341,7 +533,7 @@ class PostWidget extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: GestureDetector(
-              onTap: onComment,
+              onTap: _handleCommentTap,
               child: const Row(
                 children: [
                   CircleAvatar(

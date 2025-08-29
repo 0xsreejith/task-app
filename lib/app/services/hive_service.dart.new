@@ -1,0 +1,180 @@
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:socialmedia_clone/app/data/models/user_model.dart';
+import 'package:socialmedia_clone/app/data/models/comment_model.dart' as comment_model;
+
+class HiveService {
+  // Box names
+  static const String _userBox = 'user_box';
+  static const String _commentsBox = 'comments_box';
+  
+  // Keys
+  static const String _currentUserKey = 'current_user';
+  static const String _usersListKey = 'users_list';
+  static const String _commentsKey = 'comments';
+
+  // Box instances
+  static late Box _box;
+  static late Box _commentsStorage;
+
+  /// Initialize Hive and open boxes
+  static Future<void> init() async {
+    await Hive.initFlutter();
+    
+    // Register adapters
+    if (!Hive.isAdapterRegistered(3)) {
+      Hive.registerAdapter(comment_model.CommentAdapter());
+    }
+    
+    _box = await Hive.openBox(_userBox);
+    _commentsStorage = await Hive.openBox<comment_model.Comment>(_commentsBox);
+
+    // Create default admin user if it doesn't exist
+    await _createDefaultAdminUser();
+  }
+
+  // User related methods
+  static Future<void> setCurrentUser(dynamic user) async {
+    try {
+      final UserModel userModel;
+      if (user is UserModel) {
+        userModel = user;
+      } else if (user is Map<String, dynamic>) {
+        userModel = UserModel.fromJson(user);
+      } else {
+        throw Exception('Invalid user data type: ${user.runtimeType}');
+      }
+
+      debugPrint('💾 Saving current user to Hive: ${userModel.email}');
+      await _box.put(_currentUserKey, userModel.toJson());
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error saving current user: $e');
+      debugPrint('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  static Future<UserModel?> getCurrentUser() async {
+    final userData = _box.get(_currentUserKey);
+    if (userData == null) return null;
+
+    try {
+      if (userData is UserModel) {
+        return userData;
+      } else if (userData is Map) {
+        return UserModel.fromJson(Map<String, dynamic>.from(userData));
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error parsing user data: $e');
+      return null;
+    }
+  }
+
+  static UserModel? getCurrentUserSync() {
+    try {
+      final userData = _box.get(_currentUserKey);
+      if (userData == null) return null;
+
+      if (userData is UserModel) {
+        return userData;
+      } else if (userData is Map) {
+        return UserModel.fromJson(Map<String, dynamic>.from(userData));
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error parsing user data sync: $e');
+      return null;
+    }
+  }
+
+  // Comment related methods
+  static Future<void> saveComment(comment_model.Comment comment) async {
+    try {
+      await _commentsStorage.put(comment.id, comment);
+      debugPrint('✅ Comment saved successfully');
+    } catch (e) {
+      debugPrint('❌ Error saving comment: $e');
+      rethrow;
+    }
+  }
+
+  static List<comment_model.Comment> getComments() {
+    try {
+      return _commentsStorage.values.toList().cast<comment_model.Comment>();
+    } catch (e) {
+      debugPrint('❌ Error getting comments: $e');
+      return [];
+    }
+  }
+
+  static List<comment_model.Comment> getCommentsForPost(String postId) {
+    try {
+      return _commentsStorage.values
+          .where((comment) => (comment as comment_model.Comment).postId == postId)
+          .toList()
+          .cast<comment_model.Comment>();
+    } catch (e) {
+      debugPrint('❌ Error getting comments for post: $e');
+      return [];
+    }
+  }
+
+  static Future<void> deleteComment(String commentId) async {
+    try {
+      await _commentsStorage.delete(commentId);
+      debugPrint('✅ Comment deleted successfully');
+    } catch (e) {
+      debugPrint('❌ Error deleting comment: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> clearAllData() async {
+    await _box.clear();
+    await _commentsStorage.clear();
+  }
+
+  // Private methods
+  static Future<void> _createDefaultAdminUser() async {
+    try {
+      final users = await getUsers();
+      if (users.isEmpty) {
+        final adminUser = UserModel(
+          id: 'admin',
+          username: 'Admin',
+          email: 'admin@example.com',
+          password: 'admin123',
+          profileImageUrl: '',
+          bio: 'System Administrator',
+        );
+        await setCurrentUser(adminUser);
+        debugPrint('✅ Created default admin user');
+      }
+    } catch (e) {
+      debugPrint('❌ Error creating default admin user: $e');
+    }
+  }
+
+  static Future<List<UserModel>> getUsers() async {
+    try {
+      final user = await getCurrentUser();
+      return user != null ? [user] : [];
+    } catch (e) {
+      debugPrint('❌ Error getting users: $e');
+      return [];
+    }
+  }
+
+  static Future<UserModel?> findUserByEmail(String email) async {
+    try {
+      final users = await getUsers();
+      return users.firstWhere(
+        (user) => user.email.toLowerCase() == email.toLowerCase(),
+      );
+    } catch (e) {
+      debugPrint('❌ Error finding user by email: $e');
+      return null;
+    }
+  }
+}
