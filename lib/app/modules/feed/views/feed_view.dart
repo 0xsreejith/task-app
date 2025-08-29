@@ -10,12 +10,50 @@ import 'package:socialmedia_clone/app/data/models/user_model.dart';
 class FeedView extends GetView<FeedController> {
   const FeedView({Key? key}) : super(key: key);
 
+  void _showClearConfirmationDialog() {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Clear All Posts'),
+        content: const Text('Are you sure you want to remove all posts? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Get.back();
+              controller.clearAllPosts();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Social Media'),
         actions: [
+          // Clear all posts button
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'clear_all') {
+                _showClearConfirmationDialog();
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'clear_all',
+                child: Text('Clear All Posts'),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.add_box_outlined),
             onPressed: () => Get.toNamed(Routes.createPost),

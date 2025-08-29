@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:socialmedia_clone/app/routes/app_pages.dart';
 import 'package:socialmedia_clone/app/services/hive_service.dart';
+import 'package:socialmedia_clone/app/data/models/user_model.dart';
 
 class AuthController extends GetxController {
   // Form key for validation
@@ -118,58 +119,77 @@ class AuthController extends GetxController {
     }
   }
 
+  // Create a mock user
+  Future<UserModel> _createMockUser() async {
+    final mockUser = UserModel(
+      id: 'mock_user_${DateTime.now().millisecondsSinceEpoch}',
+      email: mockEmail,
+      username: 'admin_user',
+      password: mockPassword, // In a real app, this should be hashed
+      profileImageUrl: '',
+      bio: 'Admin User',
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+      createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      isFollowing: false,
+    );
+    
+    // Save the mock user as the current user
+    await HiveService.setCurrentUser(mockUser);
+    debugPrint('✅ Created mock user: ${mockUser.email}');
+    return mockUser;
+  }
+
   // Handle login with mock data
   Future<void> _login(String email, String password) async {
     try {
       debugPrint('🔑 Attempting login with email: $email');
 
-      // Find user by email
-      debugPrint('🔍 Looking up user in database...');
-      final user = await HiveService.findUserByEmail(email);
-
-      if (user != null) {
-        debugPrint('✅ User found: ${user.email}');
-        debugPrint('🔐 Verifying password...');
-
-        // Check if user exists and password matches
-        if (email == mockEmail && password == mockPassword) {
-          debugPrint('🔑 Password verified');
-
-          // Save user to Hive as current user
-          debugPrint('💾 Saving user session...');
-          await HiveService.setCurrentUser(user);
-
-          // Verify user was saved
-          final currentUser = await HiveService.getCurrentUser();
-          debugPrint(
-            '👤 Current user after save: ${currentUser?.email ?? 'None'}',
-          );
-          if (currentUser == null) {
-            debugPrint('❌ Failed to retrieve current user after save');
-          }
-
-          debugPrint('🔄 Navigating to main screen...');
-          // Navigate to main screen and remove all previous routes
-          await Get.offAllNamed(
-            Routes.main,
-            predicate: (route) => false, // This removes all previous routes
-          );
-
-          debugPrint('🎉 Login successful!');
-          // Show welcome message
-          _showSuccess('Welcome back, ${user.username}!');
-        } else {
-          debugPrint('❌ Invalid password');
-          _showError(
-            'Invalid email or password. Use admin@gmail.com / Sree@2005',
-          );
-        }
-      } else {
-        debugPrint('❌ User not found with email: $email');
-        _showError(
-          'Invalid email or password. Use admin@gmail.com / Sree@2005',
-        );
+      // Check if credentials match mock user
+      if (email != mockEmail || password != mockPassword) {
+        debugPrint('❌ Invalid credentials');
+        _showError('Invalid email or password. Use admin@gmail.com / Sree@2005');
+        return;
       }
+
+      // Find or create user
+      debugPrint('🔍 Looking up user in database...');
+      UserModel? user = await HiveService.findUserByEmail(email);
+      
+      if (user == null) {
+        debugPrint('ℹ️ User not found, creating mock user...');
+        user = await _createMockUser();
+      } else {
+        debugPrint('✅ User found: ${user.email}');
+      }
+
+      // Save user to Hive as current user
+      debugPrint('💾 Saving user session...');
+      await HiveService.setCurrentUser(user);
+
+      // Verify user was saved
+      final currentUser = await HiveService.getCurrentUser();
+      debugPrint(
+        '👤 Current user after save: ${currentUser?.email ?? 'None'}',
+      );
+      
+      if (currentUser == null) {
+        debugPrint('❌ Failed to retrieve current user after save');
+        _showError('Failed to save user session');
+        return;
+      }
+
+      debugPrint('🔄 Navigating to main screen...');
+      // Navigate to main screen and remove all previous routes
+      await Get.offAllNamed(
+        Routes.main,
+        predicate: (route) => false, // This removes all previous routes
+      );
+
+      debugPrint('🎉 Login successful!');
+      // Show welcome message
+      _showSuccess('Welcome back, ${user.username}!');
     } catch (e, stackTrace) {
       debugPrint('Login error: $e\n$stackTrace');
       _showError('An error occurred during login. Please try again.');

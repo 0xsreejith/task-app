@@ -385,19 +385,19 @@ class PostWidget extends StatelessWidget {
                   child: FutureBuilder<ImageProvider?>(
                     future: _getProfileImage(post.userAvatar.isNotEmpty ? post.userAvatar : currentUserAvatar),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done) {
+                      // If we have data and it's not null
+                      if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
                         return CircleAvatar(
                           radius: 20,
                           backgroundImage: snapshot.data,
                           onBackgroundImageError: (exception, stackTrace) {
                             debugPrint('Error loading profile image: $exception');
                           },
-                          child: snapshot.data == null
-                              ? const Icon(Icons.person)
-                              : null,
+                          
                         );
                       }
-                      // Show the current user's profile image as a fallback while loading
+                      
+                      // Show the current user's profile image as a fallback while loading or if no data
                       if (currentUserAvatar.isNotEmpty) {
                         return CircleAvatar(
                           radius: 20,
@@ -408,7 +408,8 @@ class PostWidget extends StatelessWidget {
                           child: const Icon(Icons.person),
                         );
                       }
-                      // If no fallback image is available, show a simple avatar
+                      
+                      // Default fallback
                       return const CircleAvatar(
                         radius: 20,
                         child: Icon(Icons.person),

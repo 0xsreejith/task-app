@@ -76,6 +76,28 @@ class FeedController extends GetxController {
     await loadPosts();
   }
 
+  /// Clears all posts from the feed
+  Future<void> clearAllPosts() async {
+    try {
+      // Clear the posts list
+      posts.clear();
+      
+      // Show success message
+      Get.snackbar(
+        'Success',
+        'All posts have been cleared',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to clear posts: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
   void navigateToCreatePost() {
     Get.toNamed(Routes.createPost);
   }

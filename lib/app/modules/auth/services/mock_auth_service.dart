@@ -9,8 +9,8 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 
 class MockAuthService {
   // Hardcoded mock user credentials
-  static const String mockEmail = 'user@gmail.com';
-  static const String mockPassword = 'Sree@20005';
+  static const String mockEmail = 'admin@gmail.com';
+  static const String mockPassword = 'Sree@2005';
   static const String mockUsername = 'testuser';
 
   // Hash password for storage
